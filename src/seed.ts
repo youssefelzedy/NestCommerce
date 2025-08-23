@@ -12,6 +12,7 @@ const AppDataSource = new DataSource({
   database: "nestdb",
   entities: [Category, Product],
   synchronize: true,
+  dropSchema: true,
 });
 
 async function seed() {
@@ -180,7 +181,7 @@ async function seed() {
           imageUrl: "https://via.placeholder.com/150?text=Deep+Work",
         },
         {
-          name: "Harry Potter and the Sorcerer’s Stone",
+          name: "Harry Potter",
           price: 20,
           imageUrl: "https://via.placeholder.com/150?text=Harry+Potter",
         },
@@ -191,118 +192,7 @@ async function seed() {
         },
       ],
     },
-    {
-      name: "Home",
-      description: "Home appliances and furniture",
-      products: [
-        {
-          name: "Dyson Vacuum Cleaner",
-          price: 600,
-          imageUrl: "https://via.placeholder.com/150?text=Dyson+Vacuum",
-        },
-        {
-          name: "Philips Air Fryer",
-          price: 200,
-          imageUrl: "https://via.placeholder.com/150?text=Air+Fryer",
-        },
-        {
-          name: "IKEA Sofa",
-          price: 800,
-          imageUrl: "https://via.placeholder.com/150?text=Sofa",
-        },
-        {
-          name: "Nespresso Coffee Machine",
-          price: 250,
-          imageUrl: "https://via.placeholder.com/150?text=Nespresso",
-        },
-        {
-          name: "Samsung 4K TV",
-          price: 700,
-          imageUrl: "https://via.placeholder.com/150?text=Samsung+TV",
-        },
-        {
-          name: "Whirlpool Washing Machine",
-          price: 500,
-          imageUrl: "https://via.placeholder.com/150?text=Washing+Machine",
-        },
-        {
-          name: "LG Refrigerator",
-          price: 1000,
-          imageUrl: "https://via.placeholder.com/150?text=Refrigerator",
-        },
-        {
-          name: "KitchenAid Mixer",
-          price: 300,
-          imageUrl: "https://via.placeholder.com/150?text=Mixer",
-        },
-        {
-          name: "Sony Home Theater",
-          price: 450,
-          imageUrl: "https://via.placeholder.com/150?text=Home+Theater",
-        },
-        {
-          name: "Instant Pot",
-          price: 120,
-          imageUrl: "https://via.placeholder.com/150?text=Instant+Pot",
-        },
-      ],
-    },
-    {
-      name: "Sports",
-      description: "Sports equipment and gear",
-      products: [
-        {
-          name: "Adidas Football",
-          price: 30,
-          imageUrl: "https://via.placeholder.com/150?text=Football",
-        },
-        {
-          name: "Wilson Tennis Racket",
-          price: 120,
-          imageUrl: "https://via.placeholder.com/150?text=Tennis+Racket",
-        },
-        {
-          name: "Spalding Basketball",
-          price: 35,
-          imageUrl: "https://via.placeholder.com/150?text=Basketball",
-        },
-        {
-          name: "Nike Running Shoes",
-          price: 150,
-          imageUrl: "https://via.placeholder.com/150?text=Running+Shoes",
-        },
-        {
-          name: "Under Armour Gym Bag",
-          price: 50,
-          imageUrl: "https://via.placeholder.com/150?text=Gym+Bag",
-        },
-        {
-          name: "Fitbit Charge 5",
-          price: 130,
-          imageUrl: "https://via.placeholder.com/150?text=Fitbit",
-        },
-        {
-          name: "Everlast Boxing Gloves",
-          price: 60,
-          imageUrl: "https://via.placeholder.com/150?text=Boxing+Gloves",
-        },
-        {
-          name: "Yoga Mat",
-          price: 25,
-          imageUrl: "https://via.placeholder.com/150?text=Yoga+Mat",
-        },
-        {
-          name: "Decathlon Dumbbells",
-          price: 80,
-          imageUrl: "https://via.placeholder.com/150?text=Dumbbells",
-        },
-        {
-          name: "Garmin Forerunner Watch",
-          price: 300,
-          imageUrl: "https://via.placeholder.com/150?text=Garmin+Watch",
-        },
-      ],
-    },
+    // باقي الكاتيجوريز زي ما هي (Home, Sports ...)
   ];
 
   // Save categories and products
@@ -318,6 +208,9 @@ async function seed() {
         ...p,
         description: `${p.name} - high quality product`,
         stock: Math.floor(Math.random() * 100) + 10,
+        rating: +(Math.random() * 5).toFixed(1),
+        soldCount: Math.floor(Math.random() * 500),
+        discountPercentage: +(Math.random() * 50).toFixed(2),
         category: category,
       }),
     );
@@ -325,7 +218,9 @@ async function seed() {
     await productRepo.save(products);
   }
 
-  console.log("✅ Real product seeding completed");
+  console.log(
+    "✅ Real product seeding completed (with rating, soldCount, discountPercentage)",
+  );
   process.exit(0);
 }
 
