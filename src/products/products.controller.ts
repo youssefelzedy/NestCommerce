@@ -23,6 +23,16 @@ export class ProductsController {
     return this.service.findAll();
   }
 
+  @Get("top-rated")
+  findTopRated() {
+    return this.service.findTopRated();
+  }
+
+  @Get("top-discounted")
+  findTopDiscounted() {
+    return this.service.findTopDiscounted();
+  }
+
   @Get(":id")
   findOne(@Param("id", ParseIntPipe) id: number) {
     return this.service.findOne(id);

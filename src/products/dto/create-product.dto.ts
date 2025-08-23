@@ -3,6 +3,7 @@ import {
   IsNumber,
   IsOptional,
   Min,
+  Max,
   MinLength,
 } from "class-validator";
 import { Type } from "class-transformer";
@@ -29,6 +30,26 @@ export class CreateProductDto {
   @IsOptional()
   @IsString()
   imageUrl?: string;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @Max(5)
+  @IsOptional()
+  rating?: number; // default = 0
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  soldCount?: number; // default = 0
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  @IsOptional()
+  discountPercentage?: number; // default = 0
 
   @Type(() => Number)
   @IsNumber()

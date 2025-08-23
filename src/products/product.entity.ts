@@ -21,6 +21,15 @@ export class Product {
   @Column({ nullable: true })
   imageUrl: string;
 
+  @Column({ type: "decimal", precision: 2, scale: 1, default: 0 })
+  rating: number;
+
+  @Column({ type: "int", default: 0 })
+  soldCount: number;
+
+  @Column({ type: "decimal", precision: 5, scale: 2, default: 0 })
+  discountPercentage: number;
+
   @ManyToOne(() => Category, (category) => category.products, {
     onDelete: "SET NULL",
     nullable: true,
