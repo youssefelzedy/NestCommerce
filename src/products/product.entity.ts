@@ -1,5 +1,12 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from "typeorm";
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  OneToMany,
+} from "typeorm";
 import { Category } from "../categories/category.entity";
+import { CustomerWishlist } from "src/customers/customerWishlist.entity";
 
 @Entity()
 export class Product {
@@ -35,4 +42,7 @@ export class Product {
     nullable: true,
   })
   category: Category | null;
+
+  @OneToMany(() => CustomerWishlist, (wishlist) => wishlist.product)
+  wishlists: CustomerWishlist[];
 }

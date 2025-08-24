@@ -5,8 +5,11 @@ import {
   Min,
   Max,
   MinLength,
+  IsArray,
+  ValidateNested,
 } from "class-validator";
 import { Type } from "class-transformer";
+import { CustomerWishlist } from "src/customers/customerWishlist.entity";
 
 export class CreateProductDto {
   @IsString()
@@ -54,4 +57,10 @@ export class CreateProductDto {
   @Type(() => Number)
   @IsNumber()
   categoryId: number;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CustomerWishlist)
+  wishlists?: CustomerWishlist[];
 }
