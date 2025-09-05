@@ -1,0 +1,21 @@
+  async resendConfirmationCode(email: string) {
+    const customerLogin = await this.customersService.findCustomerLoginByEmail(email);
+    
+    if (!customerLogin) {
+      throw new UnauthorizedException('User not found');
+    }
+    
+    if (customerLogin.isEmailConfirmed) {
+      return { message: 'Email is already confirmed' };
+    }
+    
+    const updatedLogin = await this.customersService.confirmationCodeProcess(customerLogin);
+    
+    // In a real application, send this code via email
+    console.log('New confirmation code generated:', updatedLogin.emailConfirmationCode);
+    console.log('Email sent to:', email);
+    
+    return {
+      message: 'A new confirmation code has been sent to your email',
+    };
+  }
