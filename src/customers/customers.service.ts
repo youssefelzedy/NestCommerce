@@ -20,6 +20,7 @@ import { AddItemWishlistDto } from './dto/add.item.wishlist.customer';
 import { RemoveItemWishlistDto } from './dto/remove.item.wishlist.customer';
 import { RegisterCustomerDto } from '../auth/dto/register.customer.dto';
 import { AddItemCartDto } from './dto/add.item.cart.customer';
+import { RemoveItemCartDto } from './dto/remove.item.cart.customer';
 
 @Injectable()
 export class CustomersService {
@@ -336,11 +337,75 @@ export class CustomersService {
   //   // Recalculate cart total
   // }
 
-  // // Remove from Cart
-  // async removeFromCart(customerId: number, itemId: number) {
-  //   // Remove item
-  //   // Recalculate cart total
-  // }
+  async removeFromCart(dto: RemoveItemCartDto) {
+    return this.dataSource.transaction(async (transactionManager) => {
+      try {
+        const customer = await transactionManager.findOne(Customer, {
+          where: { id: dto.customerId },
+        });
+
+        if (!customer) {
+          throw new UnauthorizedException('Customer not found');
+        }
+
+        const cart = await transactionManager.findOne(Cart, {
+          where: { customer: { id: dto.customerId } },
+          relations: ['items', 'items.product'],
+        });
+
+        if (!cart) {
+          throw new UnauthorizedException('Cart not found for this customer');
+        }
+
+        const itemIndex = cart.items.findIndex((item) => item.id === dto.itemId);
+        if (itemIndex === -1) {
+          throw new BadRequestException('Item not found in cart');
+        }
+
+        const cartItem = cart.items[itemIndex];
+
+        // Restore product stock
+        const product = await transactionManager.findOne(Product, {
+          where: { id: cartItem.product.id },
+        });
+
+        if (product) {
+          product.stock += cartItem.quantity;
+          await transactionManager.save(product);
+        }
+
+        // Remove item from cart
+        await transactionManager.remove(CartItem, cartItem);
+
+        // No need to splice - recalculate with the remaining items
+        const updatedCart = await transactionManager.findOne(Cart, {
+          where: { id: cart.id },
+          relations: ['items'],
+        });
+
+        if (!updatedCart) {
+          throw new UnauthorizedException('Cart not found for this customer');
+        }
+
+        updatedCart.totalAmount = updatedCart.items.reduce(
+          (total, item) => total + item.price * item.quantity,
+          0,
+        );
+
+        await transactionManager.save(updatedCart);
+
+        return {
+          message: 'Item removed from cart successfully',
+          cartId: updatedCart.id,
+          totalAmount: updatedCart.totalAmount,
+          itemCount: updatedCart.items.length,
+        };
+      } catch (error) {
+        console.error('Failed to remove item from cart:', error);
+        throw new BadRequestException('Failed to remove item from cart');
+      }
+    });
+  }
 
   // // Clear Cart
   // async clearCart(customerId: number) {
