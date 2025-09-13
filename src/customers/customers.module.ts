@@ -5,13 +5,24 @@ import { CustomerLogin } from './customerLogin.entity';
 import { CustomerAddress } from './customerAddress.entity';
 import { CustomerWishlist } from './customerWishlist.entity';
 import { Product } from 'src/products/product.entity';
+import { Cart } from './cart.customer.entity';
+import { CartItem } from './cart.item.entity';
+
 import { CustomersService } from './customers.service';
 import { CustomersController } from './customers.controller';
 import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Customer, CustomerLogin, CustomerAddress, CustomerWishlist, Product]),
+    TypeOrmModule.forFeature([
+      Customer,
+      CustomerLogin,
+      CustomerAddress,
+      CustomerWishlist,
+      Product,
+      Cart,
+      CartItem,
+    ]),
     forwardRef(() => AuthModule),
   ],
   providers: [CustomersService],
