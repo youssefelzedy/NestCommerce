@@ -43,9 +43,9 @@ export class CustomersController {
   }
 
   @UseGuards(JwtAuthGuard)
-  @Delete('/whishlist/item/remove/:itemId')
-  async removeWhishList(@Param('itemId') itemId: number) {
-    return await this.customersService.removeItemFromWishList({ itemId });
+  @Delete('/whishlist/item/remove/:productId')
+  async removeWhishList(@Param('productId') productId: number) {
+    return await this.customersService.removeItemFromWishList({ productId });
   }
 
   @UseGuards(JwtAuthGuard)
@@ -70,11 +70,11 @@ export class CustomersController {
   }
 
   @UseGuards(JwtAuthGuard)
-  @Delete('/cart/item/remove/:itemId')
-  async removeCartItem(@Request() req: RequestWithUser, @Param('itemId') itemId: number) {
+  @Delete('/cart/item/remove/:productId')
+  async removeCartItem(@Request() req: RequestWithUser, @Param('productId') productId: number) {
     const dto: RemoveItemCartDto = {
       customerId: req.user.customerId,
-      itemId,
+      productId,
     };
     return await this.customersService.removeFromCart(dto);
   }

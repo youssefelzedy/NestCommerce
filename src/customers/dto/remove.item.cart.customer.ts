@@ -5,5 +5,5 @@ export class RemoveItemCartDto {
   customerId: number;
 
   @IsNumber()
-  itemId: number;
+  productId: number;
 }
