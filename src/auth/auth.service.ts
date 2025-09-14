@@ -62,8 +62,8 @@ export class AuthService {
     return this.generateToken(customerLogin);
   }
 
-  async confirmEmail(email: string, code: string) {
-    const customerLogin = await this.customersService.findCustomerLoginByEmail(email);
+  async confirmEmail(dto: ConfirmEmailDto) {
+    const customerLogin = await this.customersService.findCustomerLoginByEmail(dto.email);
     if (!customerLogin) {
       throw new UnauthorizedException('User not found');
     }
@@ -72,7 +72,7 @@ export class AuthService {
       return { message: 'Email already confirmed' };
     }
 
-    if (!customerLogin.emailConfirmationCode || customerLogin.emailConfirmationCode !== code) {
+    if (!customerLogin.emailConfirmationCode || customerLogin.emailConfirmationCode !== dto.code) {
       throw new UnauthorizedException('Invalid confirmation code');
     }
 
@@ -82,7 +82,7 @@ export class AuthService {
     ) {
       const updatedLogin = await this.customersService.confirmationCodeProcess(customerLogin);
       console.log('New confirmation code generated:', updatedLogin.emailConfirmationCode);
-      console.log('Email sent to:', email);
+      console.log('Email sent to:', dto.email);
       throw new UnauthorizedException(
         'Confirmation code expired, a new code has been sent to your email',
       );
@@ -96,8 +96,8 @@ export class AuthService {
     return { message: 'Email confirmed successfully' };
   }
 
-  async resendConfirmationCode(email: string) {
-    const customerLogin = await this.customersService.findCustomerLoginByEmail(email);
+  async resendConfirmationCode(dto: ResendConfirmationDto) {
+    const customerLogin = await this.customersService.findCustomerLoginByEmail(dto.email);
 
     if (!customerLogin) {
       throw new UnauthorizedException('User not found');
@@ -111,7 +111,7 @@ export class AuthService {
 
     // In a real application, send this code via email
     console.log('New confirmation code generated:', updatedLogin.emailConfirmationCode);
-    console.log('Email sent to:', email);
+    console.log('Email sent to:', dto.email);
 
     return {
       message: 'A new confirmation code has been sent to your email',

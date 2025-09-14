@@ -25,11 +25,11 @@ export class AuthController {
 
   @Post('confirm-email')
   async confirmEmail(@Body() confirmEmailDto: ConfirmEmailDto) {
-    return this.authService.confirmEmail(confirmEmailDto.email, confirmEmailDto.code);
+    return this.authService.confirmEmail(confirmEmailDto);
   }
 
   @Post('resend-confirmation')
   async resendConfirmationCode(@Body() resendDto: ResendConfirmationDto) {
-    return this.authService.resendConfirmationCode(resendDto.email);
+    return this.authService.resendConfirmationCode(resendDto);
   }
 }

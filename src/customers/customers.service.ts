@@ -230,7 +230,7 @@ export class CustomersService {
     customerWishlist: RemoveItemWishlistDto,
   ): Promise<{ message: string }> {
     const item = await this.customerWishlistRepository.findOne({
-      where: { id: customerWishlist.itemId },
+      where: { id: customerWishlist.productId },
     });
 
     if (!item) {
@@ -357,7 +357,7 @@ export class CustomersService {
           throw new UnauthorizedException('Cart not found for this customer');
         }
 
-        const itemIndex = cart.items.findIndex((item) => item.id === dto.itemId);
+        const itemIndex = cart.items.findIndex((item) => item.id === dto.productId);
         if (itemIndex === -1) {
           throw new BadRequestException('Item not found in cart');
         }
