@@ -3,7 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { CustomersService } from '../customers/customers.service';
 import { RegisterCustomerDto } from './dto/register.customer.dto';
 import { LoginCustomerDto } from './dto/login.customer.dto';
-import { CustomerLogin } from '../customers/customerLogin.entity';
+import { CustomerLogin } from '../customers/entities/customerLogin.entity';
 import { ConfirmEmailDto } from './dto/confirm-email.dto';
 import { ResendConfirmationDto } from './dto/resend-confirmation.dto';
 

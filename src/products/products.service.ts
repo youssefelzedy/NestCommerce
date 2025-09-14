@@ -1,9 +1,9 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
-import { InjectRepository } from "@nestjs/typeorm";
-import { IsNull, Not, Repository } from "typeorm";
-import { Product } from "./product.entity";
-import { CreateProductDto } from "./dto/create-product.dto";
-import { CategoriesService } from "src/categories/categories.service";
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { IsNull, Not, Repository } from 'typeorm';
+import { Product } from './entities/product.entity';
+import { CreateProductDto } from './dto/create-product.dto';
+import { CategoriesService } from 'src/categories/categories.service';
 
 @Injectable()
 export class ProductsService {
@@ -16,7 +16,7 @@ export class ProductsService {
     const category = await this.categoriesService.findOne(dto.categoryId);
 
     if (!category) {
-      throw new NotFoundException("Category not found");
+      throw new NotFoundException('Category not found');
     }
 
     // note: price in entity is string; cast here for DECIMAL
@@ -34,13 +34,13 @@ export class ProductsService {
   }
 
   findAll() {
-    return this.repo.find({ relations: ["category"] });
+    return this.repo.find({ relations: ['category'] });
   }
 
   findOne(id: number) {
     return this.repo.findOne({
       where: { id: id },
-      relations: ["category"],
+      relations: ['category'],
     });
   }
 
@@ -48,8 +48,8 @@ export class ProductsService {
     // Sort products by rating and show only first 10
     return this.repo.find({
       where: { rating: Not(IsNull()) },
-      order: { rating: "DESC" },
-      relations: ["category"],
+      order: { rating: 'DESC' },
+      relations: ['category'],
       take: 10,
     });
   }
@@ -58,8 +58,8 @@ export class ProductsService {
     // Sort Products by discount percentage and show only first 10
     return this.repo.find({
       where: { discountPercentage: Not(IsNull()) },
-      order: { discountPercentage: "DESC" },
-      relations: ["category"],
+      order: { discountPercentage: 'DESC' },
+      relations: ['category'],
       take: 10,
     });
   }

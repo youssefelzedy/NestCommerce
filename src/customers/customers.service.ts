@@ -8,13 +8,13 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 
-import { Product } from 'src/products/product.entity';
-import { Customer } from './customer.entity';
-import { CustomerLogin } from './customerLogin.entity';
-import { CustomerAddress } from './customerAddress.entity';
-import { CustomerWishlist } from './customerWishlist.entity';
-import { Cart } from './cart.customer.entity';
-import { CartItem } from './cart.item.entity';
+import { Product } from 'src/products/entities/product.entity';
+import { Customer } from './entities/customer.entity';
+import { CustomerLogin } from './entities/customerLogin.entity';
+import { CustomerAddress } from './entities/customerAddress.entity';
+import { CustomerWishlist } from './entities/customerWishlist.entity';
+import { Cart } from './entities/cart.customer.entity';
+import { CartItem } from './entities/cart.item.entity';
 
 import { AddItemWishlistDto } from './dto/add.item.wishlist.customer';
 import { RemoveItemWishlistDto } from './dto/remove.item.wishlist.customer';

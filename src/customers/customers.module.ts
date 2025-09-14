@@ -1,12 +1,12 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Customer } from './customer.entity';
-import { CustomerLogin } from './customerLogin.entity';
-import { CustomerAddress } from './customerAddress.entity';
-import { CustomerWishlist } from './customerWishlist.entity';
-import { Product } from 'src/products/product.entity';
-import { Cart } from './cart.customer.entity';
-import { CartItem } from './cart.item.entity';
+import { Customer } from './entities/customer.entity';
+import { CustomerLogin } from './entities/customerLogin.entity';
+import { CustomerAddress } from './entities/customerAddress.entity';
+import { CustomerWishlist } from './entities/customerWishlist.entity';
+import { Product } from 'src/products/entities/product.entity';
+import { Cart } from './entities/cart.customer.entity';
+import { CartItem } from './entities/cart.item.entity';
 
 import { CustomersService } from './customers.service';
 import { CustomersController } from './customers.controller';

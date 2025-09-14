@@ -1,8 +1,8 @@
 import { Entity, PrimaryGeneratedColumn, Column, OneToOne, OneToMany } from 'typeorm';
 import { Exclude } from 'class-transformer';
-import { CustomerLogin } from '../customers/customerLogin.entity';
-import { CustomerAddress } from '../customers/customerAddress.entity';
-import { CustomerWishlist } from '../customers/customerWishlist.entity';
+import { CustomerLogin } from './customerLogin.entity';
+import { CustomerAddress } from './customerAddress.entity';
+import { CustomerWishlist } from './customerWishlist.entity';
 import { Cart } from './cart.customer.entity';
 
 @Entity()

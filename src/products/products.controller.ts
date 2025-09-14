@@ -1,15 +1,8 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Param,
-  ParseIntPipe,
-} from "@nestjs/common";
-import { ProductsService } from "./products.service";
-import { CreateProductDto } from "./dto/create-product.dto";
+import { Controller, Get, Post, Body, Param, ParseIntPipe } from '@nestjs/common';
+import { ProductsService } from './products.service';
+import { CreateProductDto } from './dto/create-product.dto';
 
-@Controller("products")
+@Controller('products')
 export class ProductsController {
   constructor(private readonly service: ProductsService) {}
 
@@ -23,18 +16,18 @@ export class ProductsController {
     return this.service.findAll();
   }
 
-  @Get("top-rated")
+  @Get('top-rated')
   findTopRated() {
     return this.service.findTopRated();
   }
 
-  @Get("top-discounted")
+  @Get('top-discounted')
   findTopDiscounted() {
     return this.service.findTopDiscounted();
   }
 
-  @Get(":id")
-  findOne(@Param("id", ParseIntPipe) id: number) {
+  @Get(':id')
+  findOne(@Param('id', ParseIntPipe) id: number) {
     return this.service.findOne(id);
   }
 }

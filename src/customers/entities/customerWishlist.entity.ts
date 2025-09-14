@@ -1,6 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, CreateDateColumn, ManyToOne } from 'typeorm';
-import { Customer } from '../customers/customer.entity';
-import { Product } from 'src/products/product.entity';
+import { Customer } from './customer.entity';
+import { Product } from 'src/products/entities/product.entity';
 
 @Entity()
 export class CustomerWishlist {
