@@ -7,9 +7,9 @@ import {
   MinLength,
   IsArray,
   ValidateNested,
-} from "class-validator";
-import { Type } from "class-transformer";
-import { CustomerWishlist } from "src/customers/customerWishlist.entity";
+} from 'class-validator';
+import { Type } from 'class-transformer';
+import { CustomerWishlist } from 'src/customers/entities/customerWishlist.entity';
 
 export class CreateProductDto {
   @IsString()

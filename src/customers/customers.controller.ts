@@ -5,6 +5,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AddItemWishlistDto } from './dto/add.item.wishlist.customer';
 import { AddItemCartDto } from './dto/add.item.cart.customer';
 import { RemoveItemCartDto } from './dto/remove.item.cart.customer';
+// import { UpdateItemCartDto } from './dto/update.item.cart.customer';
 
 interface RequestWithUser extends Request {
   user: {
@@ -77,5 +78,25 @@ export class CustomersController {
       productId,
     };
     return await this.customersService.removeFromCart(dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('/cart/item/update/:itemId/:quantity')
+  async updateCartItem(
+    @Request() req: RequestWithUser,
+    @Param('itemId') itemId: string,
+    @Param('quantity') quantity: string,
+  ) {
+    return await this.customersService.updateCartItem(
+      req.user.customerId,
+      Number(itemId),
+      Number(quantity),
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete('/cart/clear')
+  async clearCart(@Request() req: RequestWithUser) {
+    return await this.customersService.clearCart(req.user.customerId);
   }
 }
