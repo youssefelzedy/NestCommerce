@@ -1,11 +1,13 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { CategoriesModule } from './categories/categories.module';
 import { ProductsModule } from './products/products.module';
 import { CustomersModule } from './customers/customers.module';
 import { AuthModule } from './auth/auth.module';
+import { OrderModule } from './orders/orders.module';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -22,10 +24,12 @@ dotenv.config();
       autoLoadEntities: true, // automatically load all @Entity() classes
       synchronize: true, // dev only: auto create/update tables
     }),
+    EventEmitterModule.forRoot(),
     AuthModule,
     CategoriesModule,
     ProductsModule,
     CustomersModule,
+    OrderModule,
   ],
   controllers: [AppController],
   providers: [AppService],
