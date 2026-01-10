@@ -8,6 +8,7 @@ import { ProductsModule } from './products/products.module';
 import { CustomersModule } from './customers/customers.module';
 import { AuthModule } from './auth/auth.module';
 import { OrderModule } from './orders/orders.module';
+import { InventoryModule } from './inventory/inventory.module';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -30,6 +31,7 @@ dotenv.config();
     ProductsModule,
     CustomersModule,
     OrderModule,
+    InventoryModule,
   ],
   controllers: [AppController],
   providers: [AppService],

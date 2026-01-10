@@ -21,6 +21,7 @@ import { RemoveItemWishlistDto } from './dto/remove.item.wishlist.customer';
 import { RegisterCustomerDto } from '../auth/dto/register.customer.dto';
 import { AddItemCartDto } from './dto/add.item.cart.customer';
 import { RemoveItemCartDto } from './dto/remove.item.cart.customer';
+import { InventoryService } from '../inventory/inventory.service';
 // import { UpdateItemCartDto } from './dto/update.item.cart.customer';
 
 @Injectable()
@@ -41,6 +42,7 @@ export class CustomersService {
     private readonly dataSource: DataSource,
     @InjectRepository(CartItem)
     private readonly cartItemRepository: Repository<CartItem>,
+    private readonly inventoryService: InventoryService,
   ) {}
 
   async createCustomer(registerDto: RegisterCustomerDto) {
@@ -265,10 +267,6 @@ export class CustomersService {
         throw new BadRequestException('Quantity must be greater than zero');
       }
 
-      if (product.stock < dto.quantity) {
-        throw new BadRequestException('Insufficient stock for the requested product');
-      }
-
       const cart = await transactionManager.findOne(Cart, {
         where: { customer: { id: dto.customerId } },
         relations: ['items', 'items.product'],
@@ -280,13 +278,27 @@ export class CustomersService {
 
       // Check if the product is already in the cart
       const existingCartItem = cart.items.find((item) => item.product.id === dto.productId);
-      product.stock -= dto.quantity;
-      await transactionManager.save(product);
+
       if (existingCartItem) {
-        // Update quantity if product already in cart
-        existingCartItem.quantity += dto.quantity;
+        // Update quantity if product already in cart - update reservation
+        const newTotalQuantity = existingCartItem.quantity + dto.quantity;
+        await this.inventoryService.updateReservationQuantityByProductAndCustomer(
+          dto.productId,
+          dto.customerId,
+          cart.id,
+          newTotalQuantity,
+        );
+        existingCartItem.quantity = newTotalQuantity;
         await transactionManager.save(existingCartItem);
       } else {
+        // Reserve stock for new cart item
+        await this.inventoryService.reserveStock(
+          dto.productId,
+          dto.quantity,
+          dto.customerId,
+          cart.id,
+        );
+
         // Add new product to cart
         const newCartItem = transactionManager.create(CartItem, {
           product,
@@ -378,20 +390,14 @@ export class CustomersService {
           );
         }
 
-        // Get the product for stock management
-        const product = await transactionManager.findOne(Product, {
-          where: { id: cartItem.product.id },
-        });
-
-        if (!product) {
-          throw new BadRequestException('Product not found');
-        }
-
         // If quantity is 0, remove the item from cart
         if (quantity === 0) {
-          // Restore the stock for the removed item
-          product.stock += cartItem.quantity;
-          await transactionManager.save(product);
+          // Release the reservation for this product
+          await this.inventoryService.releaseReservationByProductAndCustomer(
+            cartItem.product.id,
+            customerId,
+            cart.id,
+          );
 
           // Remove the cart item
           await transactionManager.remove(CartItem, cartItem);
@@ -420,17 +426,13 @@ export class CustomersService {
           };
         }
 
-        // Calculate stock change needed for quantity update
-        const quantityDifference = quantity - cartItem.quantity;
-        const newStockLevel = product.stock - quantityDifference;
-
-        if (newStockLevel < 0) {
-          throw new BadRequestException('Insufficient stock for the requested quantity');
-        }
-
-        // Update product stock
-        product.stock = newStockLevel;
-        await transactionManager.save(product);
+        // Update the reservation quantity via inventory service
+        await this.inventoryService.updateReservationQuantityByProductAndCustomer(
+          cartItem.product.id,
+          customerId,
+          cart.id,
+          quantity,
+        );
 
         // Update cart item quantity
         cartItem.quantity = quantity;
@@ -485,15 +487,12 @@ export class CustomersService {
 
         const cartItem = cart.items[itemIndex];
 
-        // Restore product stock
-        const product = await transactionManager.findOne(Product, {
-          where: { id: cartItem.product.id },
-        });
-
-        if (product) {
-          product.stock += cartItem.quantity;
-          await transactionManager.save(product);
-        }
+        // Release the reservation for this product
+        await this.inventoryService.releaseReservationByProductAndCustomer(
+          cartItem.product.id,
+          dto.customerId,
+          cart.id,
+        );
 
         // Remove item from cart
         await transactionManager.remove(CartItem, cartItem);
@@ -552,29 +551,21 @@ export class CustomersService {
 
         console.log('Found cart with items:', cart.items.length);
 
-        // Process each item individually (same as removeFromCart approach)
+        // Release all reservations for this cart
         for (const cartItem of cart.items) {
-          console.log(`Processing cart item with ID: ${cartItem.id}`);
+          console.log(`Releasing reservation for product ${cartItem.product.id}`);
+          await this.inventoryService.releaseReservationByProductAndCustomer(
+            cartItem.product.id,
+            customerId,
+            cart.id,
+          );
 
-          // Restore product stock
-          const product = await transactionManager.findOne(Product, {
-            where: { id: cartItem.product.id },
-          });
-
-          if (product) {
-            console.log(
-              `Restoring stock for product ${product.id}: ${product.stock} + ${cartItem.quantity}`,
-            );
-            product.stock += cartItem.quantity;
-            await transactionManager.save(product);
-          }
-
-          // Remove the cart item (exactly like removeFromCart)
+          // Remove the cart item
           await transactionManager.remove(CartItem, cartItem);
           console.log(`Successfully removed cart item ${cartItem.id}`);
         }
 
-        // Fetch updated cart to recalculate total (exactly like removeFromCart)
+        // Fetch updated cart to recalculate total
         const updatedCart = await transactionManager.findOne(Cart, {
           where: { id: cart.id },
           relations: ['items'],
@@ -584,7 +575,7 @@ export class CustomersService {
           throw new UnauthorizedException('Cart not found for this customer');
         }
 
-        // Recalculate total (exactly like removeFromCart)
+        // Recalculate total
         updatedCart.totalAmount = updatedCart.items.reduce(
           (total, item) => total + item.price * item.quantity,
           0,

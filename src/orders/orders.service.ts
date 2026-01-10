@@ -24,6 +24,7 @@ import {
   OrderStatusChangedEventPayload,
   OrderCancelledEventPayload,
 } from './events/order.events';
+import { InventoryService } from '../inventory/inventory.service';
 
 @Injectable()
 export class OrderService {
@@ -40,6 +41,7 @@ export class OrderService {
     private readonly productRepository: Repository<Product>,
     private readonly dataSource: DataSource,
     private readonly eventEmitter: EventEmitter2,
+    private readonly inventoryService: InventoryService,
   ) {}
 
   private readonly validStatusTransitions: Record<OrderStatus, OrderStatus[]> = {
@@ -84,12 +86,6 @@ export class OrderService {
           throw new BadRequestException(`Product ${cartItem.product.id} not found`);
         }
 
-        if (product.stock < cartItem.quantity) {
-          throw new BadRequestException(
-            `Insufficient stock for product ${product.name}. Available: ${product.stock}, Required: ${cartItem.quantity}`,
-          );
-        }
-
         const subtotal = Number(product.price) * cartItem.quantity;
         totalPrice += subtotal;
 
@@ -99,13 +95,9 @@ export class OrderService {
           unitPrice: Number(product.price),
           subtotal,
         });
-
-        // Update product stock
-        product.stock -= cartItem.quantity;
-        await manager.save(Product, product);
       }
 
-      // Create order
+      // Create order first to get the order ID
       const order = manager.create(Order, {
         customerId,
         totalPrice,
@@ -113,6 +105,16 @@ export class OrderService {
       });
 
       const savedOrder = await manager.save(Order, order);
+
+      // Confirm all cart item reservations and deduct from physical stock
+      for (const cartItem of cart.items) {
+        await this.inventoryService.confirmReservationByProductAndCustomer(
+          cartItem.product.id,
+          customerId,
+          cart.id,
+          savedOrder.id,
+        );
+      }
 
       // Create order items
       const orderItemEntities = orderItems.map((item) =>
@@ -124,7 +126,7 @@ export class OrderService {
 
       await manager.save(OrderItem, orderItemEntities);
 
-      // Clear the cart
+      // Clear the cart items (reservations already confirmed, no need to release)
       await manager.remove(cart.items);
       cart.totalAmount = 0;
       await manager.save(Cart, cart);

@@ -11,6 +11,7 @@ import { CartItem } from './entities/cart.item.entity';
 import { CustomersService } from './customers.service';
 import { CustomersController } from './customers.controller';
 import { AuthModule } from '../auth/auth.module';
+import { InventoryModule } from '../inventory/inventory.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { AuthModule } from '../auth/auth.module';
       CartItem,
     ]),
     forwardRef(() => AuthModule),
+    InventoryModule,
   ],
   providers: [CustomersService],
   controllers: [CustomersController],

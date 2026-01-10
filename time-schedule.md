@@ -20,10 +20,12 @@
 - [x] **Customer Management** (Profile, Addresses, Wishlist)
 - [x] **Product Management** (CRUD operations)
 - [x] **Category Management** (CRUD operations)
-- [x] **Cart Management** (Add/Remove items, partial implementation)
+- [x] **Cart Management** (Full CRUD with inventory reservation)
+- [x] **Order Management** (Create, Status tracking, Cancel, History)
+- [x] **Inventory Management** (Stock reservation, Availability checking, Transactions)
 
 ### 🔄 Partially Implemented Services
-- [x] **Cart Service** (Missing: Update quantity, Get cart, Clear cart)
+- [x] **Cart Service** ✅ Complete with inventory reservation integration
 
 ---
 
@@ -51,15 +53,15 @@
 - [ ] Payment history
 - [ ] Invoice generation
 
-### 3. Inventory Management Service
+### 3. Inventory Management Service ✅
 **Purpose**: Track product stock and availability
 
 **Features to Implement:**
-- [ ] Stock level monitoring
-- [ ] Low stock alerts
-- [ ] Stock reservation during checkout
-- [ ] Stock adjustment for returns/exchanges
-- [ ] Product availability checking
+- [x] Stock level monitoring
+- [x] Low stock alerts
+- [x] Stock reservation during checkout
+- [x] Stock adjustment for returns/exchanges
+- [x] Product availability checking
 - [ ] Bulk stock updates
 
 ### 4. Shipping Service
@@ -255,20 +257,20 @@
 ## MVP Implementation Timeline
 
 ### Phase 1 (Weeks 1-2) - Core Functionality
-- [ ] Complete cart functionality
-  - [ ] Update cart item quantity
-  - [ ] Get cart with items
-  - [ ] Clear cart
-- [ ] Basic order management
-  - [ ] Create order from cart
-  - [ ] Get order details
-  - [ ] Order status updates
+- [x] Complete cart functionality
+  - [x] Update cart item quantity
+  - [x] Get cart with items
+  - [x] Clear cart
+- [x] Basic order management
+  - [x] Create order from cart
+  - [x] Get order details
+  - [x] Order status updates
 - [ ] Simple payment integration
   - [ ] Stripe integration
   - [ ] Payment processing
-- [ ] Inventory tracking
-  - [ ] Stock updates on purchase
-  - [ ] Stock validation
+- [x] Inventory tracking
+  - [x] Stock updates on purchase
+  - [x] Stock validation
 
 ### Phase 2 (Weeks 3-4) - Enhanced Features
 - [ ] Shipping management
