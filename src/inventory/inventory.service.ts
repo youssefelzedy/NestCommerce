@@ -581,7 +581,10 @@ export class InventoryService {
     // 1. Get low stock products using checkLowStockAlerts()
     const lowStockProducts = await this.checkLowStockAlerts();
 
-    if (lowStockProducts.length === 0) console.log('[Inventory] No low stock');
+    if (lowStockProducts.length === 0) {
+      console.log('[Inventory] No low stock');
+      return;
+    }
     // 2. For each, call createOrUpdateStockAlert()
     for (const { product, availableStock } of lowStockProducts) {
       await this.createOrUpdateStockAlert(product.id, availableStock, this.LOW_STOCK_THRESHOLD);
@@ -638,6 +641,9 @@ export class InventoryService {
     const availableStock = await this.getAvailableStock(productId);
 
     if (availableStock >= this.LOW_STOCK_THRESHOLD) {
+      // Store the original stock value before updating
+      const previousStock = existingAlert.currentStock;
+
       // 4. Mark alert as RESOLVED
       existingAlert.alertStatus = AlertStatus.RESOLVED;
       existingAlert.currentStock = availableStock;
@@ -647,7 +653,7 @@ export class InventoryService {
       this.eventEmitter.emit('inventory.stock-alert.resolved', {
         alertId: existingAlert.id,
         productId,
-        previousStock: existingAlert.currentStock,
+        previousStock,
         newStock: availableStock,
         resolvedAt: new Date(),
       });
@@ -660,5 +666,195 @@ export class InventoryService {
     existingAlert.currentStock = availableStock;
     await this.stockAlertRepository.save(existingAlert);
     return existingAlert;
+  }
+
+  // ==================== BULK OPERATIONS ====================
+
+  /**
+   * Bulk update stock for multiple products
+   * Supports ADD, SUBTRACT, and SET operations
+   * All updates happen in a single transaction - all succeed or all fail
+   */
+  async bulkUpdateStock(
+    items: Array<{ productId: number; quantity: number; updateType?: string }>,
+    reason?: string,
+  ): Promise<{
+    success: boolean;
+    updated: number;
+    results: Array<{
+      productId: number;
+      previousStock: number;
+      newStock: number;
+      updateType: string;
+      success: boolean;
+      error?: string;
+    }>;
+  }> {
+    const results: Array<{
+      productId: number;
+      previousStock: number;
+      newStock: number;
+      updateType: string;
+      success: boolean;
+      error?: string;
+    }> = [];
+
+    return this.dataSource.transaction(async (manager) => {
+      for (const item of items) {
+        try {
+          const updateType = item.updateType || 'SET';
+
+          // Lock the product row to prevent race conditions
+          const product = await manager.findOne(Product, {
+            where: { id: item.productId },
+            lock: { mode: 'pessimistic_write' },
+          });
+
+          if (!product) {
+            results.push({
+              productId: item.productId,
+              previousStock: 0,
+              newStock: 0,
+              updateType,
+              success: false,
+              error: `Product ${item.productId} not found`,
+            });
+            continue;
+          }
+
+          const previousStock = product.stock;
+          let newStock: number;
+          let transactionType: TransactionType;
+          let quantityChange: number;
+
+          // Calculate new stock based on update type
+          switch (updateType) {
+            case 'ADD': {
+              newStock = previousStock + item.quantity;
+              quantityChange = item.quantity;
+              transactionType = TransactionType.IN;
+              break;
+            }
+
+            case 'SUBTRACT': {
+              newStock = previousStock - item.quantity;
+              quantityChange = -item.quantity;
+              transactionType = TransactionType.OUT;
+
+              // Validate against reserved stock
+              const reserved = await this.getReservedStock(item.productId);
+              if (newStock < reserved) {
+                results.push({
+                  productId: item.productId,
+                  previousStock,
+                  newStock: previousStock,
+                  updateType,
+                  success: false,
+                  error: `Cannot reduce stock below reserved amount. Reserved: ${reserved}, Attempted new stock: ${newStock}`,
+                });
+                continue;
+              }
+              break;
+            }
+
+            case 'SET':
+            default: {
+              // Validate against reserved stock for SET operations
+              const reservedForSet = await this.getReservedStock(item.productId);
+              if (item.quantity < reservedForSet) {
+                results.push({
+                  productId: item.productId,
+                  previousStock,
+                  newStock: previousStock,
+                  updateType,
+                  success: false,
+                  error: `Cannot set stock below reserved amount. Reserved: ${reservedForSet}, Attempted: ${item.quantity}`,
+                });
+                continue;
+              }
+
+              newStock = item.quantity;
+              quantityChange = newStock - previousStock;
+              transactionType = quantityChange >= 0 ? TransactionType.IN : TransactionType.OUT;
+              break;
+            }
+          }
+
+          // Validate non-negative stock
+          if (newStock < 0) {
+            results.push({
+              productId: item.productId,
+              previousStock,
+              newStock: previousStock,
+              updateType,
+              success: false,
+              error: `Stock cannot be negative. Current: ${previousStock}, Attempted: ${newStock}`,
+            });
+            continue;
+          }
+
+          // Update product stock
+          product.stock = newStock;
+          await manager.save(Product, product);
+
+          // Record inventory transaction
+          const transaction = manager.create(InventoryTransaction, {
+            productId: item.productId,
+            transactionType,
+            quantity: quantityChange,
+            previousStock,
+            newStock,
+            referenceType: 'BULK_UPDATE',
+            reason: reason || `Bulk stock ${updateType.toLowerCase()}: ${item.quantity} units`,
+          });
+          await manager.save(InventoryTransaction, transaction);
+
+          // Check and update stock alerts
+          const availableStock = await this.getAvailableStock(item.productId);
+          await this.createOrUpdateStockAlert(
+            item.productId,
+            availableStock,
+            this.LOW_STOCK_THRESHOLD,
+          );
+          await this.resolveStockAlert(item.productId);
+
+          results.push({
+            productId: item.productId,
+            previousStock,
+            newStock,
+            updateType,
+            success: true,
+          });
+        } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+          results.push({
+            productId: item.productId,
+            previousStock: 0,
+            newStock: 0,
+            updateType: item.updateType || 'SET',
+            success: false,
+            error: errorMessage,
+          });
+        }
+      }
+
+      // Check if all updates were successful
+      const allSuccessful = results.every((r) => r.success);
+      const successCount = results.filter((r) => r.success).length;
+
+      // If any failed, rollback transaction
+      if (!allSuccessful) {
+        throw new BadRequestException({
+          message: `Bulk update failed. ${successCount}/${items.length} succeeded. Transaction rolled back.`,
+          results,
+        });
+      }
+
+      return {
+        success: true,
+        updated: successCount,
+        results,
+      };
+    });
   }
 }

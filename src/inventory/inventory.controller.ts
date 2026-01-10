@@ -9,10 +9,12 @@ import {
   UseGuards,
   Request,
   ParseIntPipe,
+  BadRequestException,
 } from '@nestjs/common';
 import { InventoryService } from './inventory.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ReserveStockDto } from './dto/reserve-stock.dto';
+import { BulkUpdateStockDto } from './dto/bulk-update-stock.dto';
 import { AlertStatus } from './entities/stock-alert.entity';
 
 interface RequestWithUser extends Request {
@@ -54,10 +56,26 @@ export class InventoryController {
     return this.inventoryService.checkAvailability(productId, quantity);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get('low-stock')
   async getLowStockAlert(@Query('status') status?: string) {
-    // 1. Convert string to AlertStatus enum (if provided)
-    const alertStatus = status ? (status as AlertStatus) : undefined;
+    // TODO: Add admin guard when admin authentication is implemented
+    // Stock alert data is sensitive business information that should be admin-only
+
+    // 1. Validate and convert string to AlertStatus enum (if provided)
+    let alertStatus: AlertStatus | undefined = undefined;
+
+    if (status) {
+      // Check if the provided status is a valid AlertStatus value
+      const validStatuses = Object.values(AlertStatus);
+      if (!validStatuses.includes(status as AlertStatus)) {
+        throw new BadRequestException(
+          `Invalid status value. Must be one of: ${validStatuses.join(', ')}`,
+        );
+      }
+      alertStatus = status as AlertStatus;
+    }
+
     // 2. Call this.inventoryService.getLowStockAlerts(...)
     const alerts = await this.inventoryService.getLowStockAlerts(alertStatus);
 
@@ -175,6 +193,23 @@ export class InventoryController {
 
     return {
       message: `Cleaned up ${result.cleaned} expired reservations`,
+      ...result,
+    };
+  }
+
+  // ==================== ADMIN: BULK OPERATIONS ====================
+
+  @Post('bulk-update')
+  async bulkUpdateStock(@Body() dto: BulkUpdateStockDto) {
+    // TODO: Add admin guard when admin authentication is implemented
+    const result = await this.inventoryService.bulkUpdateStock(
+      dto.items,
+
+      dto.reason,
+    );
+
+    return {
+      message: `Successfully updated ${result.updated} product(s)`,
       ...result,
     };
   }

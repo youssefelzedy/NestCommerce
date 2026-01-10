@@ -69,9 +69,11 @@
 - [x] Stock adjustment for returns/exchanges
 - [x] Product availability checking
 - [x] Alert resolution when stock replenished (integrated with cart release & order cancel)
-- [ ] Bulk stock updates
+- [x] Bulk stock updates
 
-**Note**: Event emitters are in place (`inventory.low-stock.detected`, `inventory.stock-alert.resolved`) but listeners for sending actual notifications (email/SMS) are not implemented yet. Will be handled by Notification Service in Phase 2.
+**Notes**:
+- Event emitters are in place (`inventory.low-stock.detected`, `inventory.stock-alert.resolved`) but listeners for sending actual notifications (email/SMS) are not implemented yet. Will be handled by Notification Service in Phase 2.
+- **Future enhancement needed**: Admin-specific role-based authorization guard to ensure only admin users can access stock alert data. Currently using JWT authentication, but needs admin role verification when admin system is implemented.
 
 ### 4. Shipping Service
 **Purpose**: Manage shipping options and delivery
