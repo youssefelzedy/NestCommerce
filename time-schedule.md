@@ -58,11 +58,20 @@
 
 **Features to Implement:**
 - [x] Stock level monitoring
-- [x] Low stock alerts
+- [x] Low stock alerts (Cron job + API endpoint)
+  - [x] Daily cron job at 9 AM to check stock levels
+  - [x] `GET /inventory/low-stock` endpoint (filter by status)
+  - [x] Alert creation and updates
+  - [x] Alert resolution on stock replenishment
+  - [x] Event emission for notifications
+  - [ ] **Event listeners (Email/SMS notifications) - Not implemented yet**
 - [x] Stock reservation during checkout
 - [x] Stock adjustment for returns/exchanges
 - [x] Product availability checking
+- [x] Alert resolution when stock replenished (integrated with cart release & order cancel)
 - [ ] Bulk stock updates
+
+**Note**: Event emitters are in place (`inventory.low-stock.detected`, `inventory.stock-alert.resolved`) but listeners for sending actual notifications (email/SMS) are not implemented yet. Will be handled by Notification Service in Phase 2.
 
 ### 4. Shipping Service
 **Purpose**: Manage shipping options and delivery

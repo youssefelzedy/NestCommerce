@@ -5,12 +5,14 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 
 import { Product } from '../products/entities/product.entity';
 import { InventoryTransaction, TransactionType } from './entities/inventory-transaction.entity';
-import { StockAlert } from './entities/stock-alert.entity';
+import { StockAlert, AlertStatus } from './entities/stock-alert.entity';
 import { StockReservation, ReservationStatus } from './entities/stock-reservation.entity';
+import { Cron, CronExpression } from '@nestjs/schedule';
 
 @Injectable()
 export class InventoryService {
   private readonly RESERVATION_EXPIRY_MINUTES = 30;
+  private readonly LOW_STOCK_THRESHOLD = 10;
 
   constructor(
     @InjectRepository(Product)
@@ -203,6 +205,9 @@ export class InventoryService {
         customerId: reservation.customerId,
       });
 
+      // Check if stock alert can be resolved
+      await this.resolveStockAlert(reservation.productId);
+
       return {
         message: `Reservation ${reservationId} released. ${reservation.reservedQuantity} units now available.`,
       };
@@ -272,6 +277,8 @@ export class InventoryService {
         orderId,
       });
 
+      await this.resolveStockAlert(reservation.productId);
+
       return reservation;
     });
   }
@@ -309,6 +316,9 @@ export class InventoryService {
         quantity: reservation.reservedQuantity,
         customerId: reservation.customerId,
       });
+
+      // Check if stock alert can be resolved after releasing expired reservation
+      await this.resolveStockAlert(reservation.productId);
     }
 
     console.log(`[Inventory] Cleaned up ${reservationIds.length} expired reservations`);
@@ -507,5 +517,148 @@ export class InventoryService {
     }
 
     return this.confirmReservation(reservation.id, orderId);
+  }
+
+  async checkLowStockAlerts(): Promise<{ product: Product; availableStock: number }[]> {
+    const lowStockProducts: { product: Product; availableStock: number }[] = [];
+    // 1. Get all products
+    const products = await this.productRepository.find();
+
+    if (products.length === 0) {
+      return [];
+    }
+    // 2. For each product, check available stock
+    for (const product of products) {
+      const availableStock = await this.getAvailableStock(product.id);
+
+      // 3. Filter products where availableStock < threshold
+      if (availableStock < this.LOW_STOCK_THRESHOLD) {
+        lowStockProducts.push({ product, availableStock });
+      }
+    }
+    // 4. Return the low stock products
+    return lowStockProducts;
+  }
+
+  async createOrUpdateStockAlert(
+    productId: number,
+    currentStock: number,
+    threshold: number,
+  ): Promise<StockAlert> {
+    // 1. Find existing PENDING alert for this product
+    const existingAlert = await this.stockAlertRepository.findOne({
+      where: {
+        productId,
+        alertStatus: AlertStatus.PENDING,
+      },
+    });
+
+    // 2. If found, update currentStock and save
+    if (existingAlert) {
+      existingAlert.currentStock = currentStock;
+      existingAlert.alertThreshold = threshold;
+      await this.stockAlertRepository.save(existingAlert);
+      return existingAlert;
+    }
+
+    // 3. If not found, create new alert with PENDING status
+    const newAlert = this.stockAlertRepository.create({
+      productId,
+      currentStock,
+      alertThreshold: threshold,
+      alertStatus: AlertStatus.PENDING,
+    });
+    await this.stockAlertRepository.save(newAlert);
+
+    // 4. Return the alert
+    return newAlert;
+  }
+
+  @Cron(CronExpression.EVERY_DAY_AT_9AM)
+  async handleLowStockCheck(): Promise<void> {
+    console.log('[Inventory] Running low stock check...');
+
+    // 1. Get low stock products using checkLowStockAlerts()
+    const lowStockProducts = await this.checkLowStockAlerts();
+
+    if (lowStockProducts.length === 0) console.log('[Inventory] No low stock');
+    // 2. For each, call createOrUpdateStockAlert()
+    for (const { product, availableStock } of lowStockProducts) {
+      await this.createOrUpdateStockAlert(product.id, availableStock, this.LOW_STOCK_THRESHOLD);
+    }
+    // 3. Emit event with summary for notification system
+    this.eventEmitter.emit('inventory.low-stock.detected', {
+      alertCount: lowStockProducts.length,
+      products: lowStockProducts.map(({ product, availableStock }) => ({
+        productId: product.id,
+        productName: product.name,
+        currentStock: availableStock,
+        threshold: this.LOW_STOCK_THRESHOLD,
+        shortfall: this.LOW_STOCK_THRESHOLD - availableStock,
+      })),
+      createdAt: new Date(),
+    });
+    // 4. Log summary
+    console.log(`[Inventory] Found ${lowStockProducts.length} low stock products`);
+  }
+
+  async getLowStockAlerts(status?: AlertStatus): Promise<StockAlert[]> {
+    // Build where clause conditionally
+    const whereClause = status ? { alertStatus: status } : {};
+
+    // Query with optional filter
+    const stockAlerts = await this.stockAlertRepository.find({
+      where: whereClause,
+      relations: ['product'],
+      order: { createdAt: 'DESC' },
+    });
+
+    return stockAlerts;
+  }
+
+  /**
+   * Resolve stock alert when stock is replenished
+   * Called when stock is added back (restock, return, etc.)
+   */
+  async resolveStockAlert(productId: number): Promise<StockAlert | null> {
+    // 1. Find existing PENDING alert for this product
+    const existingAlert = await this.stockAlertRepository.findOne({
+      where: {
+        productId,
+        alertStatus: AlertStatus.PENDING,
+      },
+    });
+
+    // 2. If no pending alert, return null
+    if (!existingAlert) {
+      return null;
+    }
+
+    // 3. Check if stock is now above threshold
+    const availableStock = await this.getAvailableStock(productId);
+
+    if (availableStock >= this.LOW_STOCK_THRESHOLD) {
+      // 4. Mark alert as RESOLVED
+      existingAlert.alertStatus = AlertStatus.RESOLVED;
+      existingAlert.currentStock = availableStock;
+      await this.stockAlertRepository.save(existingAlert);
+
+      // 5. Emit event for notification
+      this.eventEmitter.emit('inventory.stock-alert.resolved', {
+        alertId: existingAlert.id,
+        productId,
+        previousStock: existingAlert.currentStock,
+        newStock: availableStock,
+        resolvedAt: new Date(),
+      });
+
+      console.log(`[Inventory] Stock alert resolved for product ${productId}`);
+      return existingAlert;
+    }
+
+    // Stock still below threshold, update current stock but keep PENDING
+    existingAlert.currentStock = availableStock;
+    await this.stockAlertRepository.save(existingAlert);
+    return existingAlert;
   }
 }

@@ -13,6 +13,7 @@ import {
 import { InventoryService } from './inventory.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ReserveStockDto } from './dto/reserve-stock.dto';
+import { AlertStatus } from './entities/stock-alert.entity';
 
 interface RequestWithUser extends Request {
   user: {
@@ -51,6 +52,28 @@ export class InventoryController {
     @Query('quantity', ParseIntPipe) quantity: number,
   ) {
     return this.inventoryService.checkAvailability(productId, quantity);
+  }
+
+  @Get('low-stock')
+  async getLowStockAlert(@Query('status') status?: string) {
+    // 1. Convert string to AlertStatus enum (if provided)
+    const alertStatus = status ? (status as AlertStatus) : undefined;
+    // 2. Call this.inventoryService.getLowStockAlerts(...)
+    const alerts = await this.inventoryService.getLowStockAlerts(alertStatus);
+
+    // 3. Return formatted response
+    return {
+      count: alerts.length,
+      alerts: alerts.map((alert) => ({
+        id: alert.id,
+        productId: alert.productId,
+        productName: alert.product?.name,
+        currentStock: alert.currentStock,
+        threshold: alert.alertThreshold,
+        status: alert.alertStatus,
+        createdAt: alert.createdAt,
+      })),
+    };
   }
 
   // ==================== RESERVATIONS ====================

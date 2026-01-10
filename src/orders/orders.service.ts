@@ -308,6 +308,9 @@ export class OrderService {
         if (product) {
           product.stock += item.quantity;
           await manager.save(Product, product);
+
+          // Check if stock alert can be resolved after restoring stock
+          await this.inventoryService.resolveStockAlert(item.productId);
         }
       }
 
