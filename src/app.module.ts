@@ -9,6 +9,7 @@ import { CustomersModule } from './customers/customers.module';
 import { AuthModule } from './auth/auth.module';
 import { OrderModule } from './orders/orders.module';
 import { InventoryModule } from './inventory/inventory.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -32,6 +33,7 @@ dotenv.config();
     CustomersModule,
     OrderModule,
     InventoryModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
