@@ -5,12 +5,14 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 
 import { Product } from '../products/entities/product.entity';
 import { InventoryTransaction, TransactionType } from './entities/inventory-transaction.entity';
-import { StockAlert } from './entities/stock-alert.entity';
+import { StockAlert, AlertStatus } from './entities/stock-alert.entity';
 import { StockReservation, ReservationStatus } from './entities/stock-reservation.entity';
+import { Cron, CronExpression } from '@nestjs/schedule';
 
 @Injectable()
 export class InventoryService {
   private readonly RESERVATION_EXPIRY_MINUTES = 30;
+  private readonly LOW_STOCK_THRESHOLD = 10;
 
   constructor(
     @InjectRepository(Product)
@@ -203,6 +205,9 @@ export class InventoryService {
         customerId: reservation.customerId,
       });
 
+      // Check if stock alert can be resolved
+      await this.resolveStockAlert(reservation.productId);
+
       return {
         message: `Reservation ${reservationId} released. ${reservation.reservedQuantity} units now available.`,
       };
@@ -272,6 +277,8 @@ export class InventoryService {
         orderId,
       });
 
+      await this.resolveStockAlert(reservation.productId);
+
       return reservation;
     });
   }
@@ -309,6 +316,9 @@ export class InventoryService {
         quantity: reservation.reservedQuantity,
         customerId: reservation.customerId,
       });
+
+      // Check if stock alert can be resolved after releasing expired reservation
+      await this.resolveStockAlert(reservation.productId);
     }
 
     console.log(`[Inventory] Cleaned up ${reservationIds.length} expired reservations`);
@@ -507,5 +517,344 @@ export class InventoryService {
     }
 
     return this.confirmReservation(reservation.id, orderId);
+  }
+
+  async checkLowStockAlerts(): Promise<{ product: Product; availableStock: number }[]> {
+    const lowStockProducts: { product: Product; availableStock: number }[] = [];
+    // 1. Get all products
+    const products = await this.productRepository.find();
+
+    if (products.length === 0) {
+      return [];
+    }
+    // 2. For each product, check available stock
+    for (const product of products) {
+      const availableStock = await this.getAvailableStock(product.id);
+
+      // 3. Filter products where availableStock < threshold
+      if (availableStock < this.LOW_STOCK_THRESHOLD) {
+        lowStockProducts.push({ product, availableStock });
+      }
+    }
+    // 4. Return the low stock products
+    return lowStockProducts;
+  }
+
+  async createOrUpdateStockAlert(
+    productId: number,
+    currentStock: number,
+    threshold: number,
+  ): Promise<StockAlert> {
+    // 1. Find existing PENDING alert for this product
+    const existingAlert = await this.stockAlertRepository.findOne({
+      where: {
+        productId,
+        alertStatus: AlertStatus.PENDING,
+      },
+    });
+
+    // 2. If found, update currentStock and save
+    if (existingAlert) {
+      existingAlert.currentStock = currentStock;
+      existingAlert.alertThreshold = threshold;
+      await this.stockAlertRepository.save(existingAlert);
+      return existingAlert;
+    }
+
+    // 3. If not found, create new alert with PENDING status
+    const newAlert = this.stockAlertRepository.create({
+      productId,
+      currentStock,
+      alertThreshold: threshold,
+      alertStatus: AlertStatus.PENDING,
+    });
+    await this.stockAlertRepository.save(newAlert);
+
+    // 4. Return the alert
+    return newAlert;
+  }
+
+  @Cron(CronExpression.EVERY_DAY_AT_9AM)
+  async handleLowStockCheck(): Promise<void> {
+    console.log('[Inventory] Running low stock check...');
+
+    // 1. Get low stock products using checkLowStockAlerts()
+    const lowStockProducts = await this.checkLowStockAlerts();
+
+    if (lowStockProducts.length === 0) {
+      console.log('[Inventory] No low stock');
+      return;
+    }
+    // 2. For each, call createOrUpdateStockAlert()
+    for (const { product, availableStock } of lowStockProducts) {
+      await this.createOrUpdateStockAlert(product.id, availableStock, this.LOW_STOCK_THRESHOLD);
+    }
+    // 3. Emit event with summary for notification system
+    this.eventEmitter.emit('inventory.low-stock.detected', {
+      alertCount: lowStockProducts.length,
+      products: lowStockProducts.map(({ product, availableStock }) => ({
+        productId: product.id,
+        productName: product.name,
+        currentStock: availableStock,
+        threshold: this.LOW_STOCK_THRESHOLD,
+        shortfall: this.LOW_STOCK_THRESHOLD - availableStock,
+      })),
+      createdAt: new Date(),
+    });
+    // 4. Log summary
+    console.log(`[Inventory] Found ${lowStockProducts.length} low stock products`);
+  }
+
+  async getLowStockAlerts(status?: AlertStatus): Promise<StockAlert[]> {
+    // Build where clause conditionally
+    const whereClause = status ? { alertStatus: status } : {};
+
+    // Query with optional filter
+    const stockAlerts = await this.stockAlertRepository.find({
+      where: whereClause,
+      relations: ['product'],
+      order: { createdAt: 'DESC' },
+    });
+
+    return stockAlerts;
+  }
+
+  /**
+   * Resolve stock alert when stock is replenished
+   * Called when stock is added back (restock, return, etc.)
+   */
+  async resolveStockAlert(productId: number): Promise<StockAlert | null> {
+    // 1. Find existing PENDING alert for this product
+    const existingAlert = await this.stockAlertRepository.findOne({
+      where: {
+        productId,
+        alertStatus: AlertStatus.PENDING,
+      },
+    });
+
+    // 2. If no pending alert, return null
+    if (!existingAlert) {
+      return null;
+    }
+
+    // 3. Check if stock is now above threshold
+    const availableStock = await this.getAvailableStock(productId);
+
+    if (availableStock >= this.LOW_STOCK_THRESHOLD) {
+      // Store the original stock value before updating
+      const previousStock = existingAlert.currentStock;
+
+      // 4. Mark alert as RESOLVED
+      existingAlert.alertStatus = AlertStatus.RESOLVED;
+      existingAlert.currentStock = availableStock;
+      await this.stockAlertRepository.save(existingAlert);
+
+      // 5. Emit event for notification
+      this.eventEmitter.emit('inventory.stock-alert.resolved', {
+        alertId: existingAlert.id,
+        productId,
+        previousStock,
+        newStock: availableStock,
+        resolvedAt: new Date(),
+      });
+
+      console.log(`[Inventory] Stock alert resolved for product ${productId}`);
+      return existingAlert;
+    }
+
+    // Stock still below threshold, update current stock but keep PENDING
+    existingAlert.currentStock = availableStock;
+    await this.stockAlertRepository.save(existingAlert);
+    return existingAlert;
+  }
+
+  // ==================== BULK OPERATIONS ====================
+
+  /**
+   * Bulk update stock for multiple products
+   * Supports ADD, SUBTRACT, and SET operations
+   * All updates happen in a single transaction - all succeed or all fail
+   */
+  async bulkUpdateStock(
+    items: Array<{ productId: number; quantity: number; updateType?: string }>,
+    reason?: string,
+  ): Promise<{
+    success: boolean;
+    updated: number;
+    results: Array<{
+      productId: number;
+      previousStock: number;
+      newStock: number;
+      updateType: string;
+      success: boolean;
+      error?: string;
+    }>;
+  }> {
+    const results: Array<{
+      productId: number;
+      previousStock: number;
+      newStock: number;
+      updateType: string;
+      success: boolean;
+      error?: string;
+    }> = [];
+
+    return this.dataSource.transaction(async (manager) => {
+      for (const item of items) {
+        try {
+          const updateType = item.updateType || 'SET';
+
+          // Lock the product row to prevent race conditions
+          const product = await manager.findOne(Product, {
+            where: { id: item.productId },
+            lock: { mode: 'pessimistic_write' },
+          });
+
+          if (!product) {
+            results.push({
+              productId: item.productId,
+              previousStock: 0,
+              newStock: 0,
+              updateType,
+              success: false,
+              error: `Product ${item.productId} not found`,
+            });
+            continue;
+          }
+
+          const previousStock = product.stock;
+          let newStock: number;
+          let transactionType: TransactionType;
+          let quantityChange: number;
+
+          // Calculate new stock based on update type
+          switch (updateType) {
+            case 'ADD': {
+              newStock = previousStock + item.quantity;
+              quantityChange = item.quantity;
+              transactionType = TransactionType.IN;
+              break;
+            }
+
+            case 'SUBTRACT': {
+              newStock = previousStock - item.quantity;
+              quantityChange = -item.quantity;
+              transactionType = TransactionType.OUT;
+
+              // Validate against reserved stock
+              const reserved = await this.getReservedStock(item.productId);
+              if (newStock < reserved) {
+                results.push({
+                  productId: item.productId,
+                  previousStock,
+                  newStock: previousStock,
+                  updateType,
+                  success: false,
+                  error: `Cannot reduce stock below reserved amount. Reserved: ${reserved}, Attempted new stock: ${newStock}`,
+                });
+                continue;
+              }
+              break;
+            }
+
+            case 'SET':
+            default: {
+              // Validate against reserved stock for SET operations
+              const reservedForSet = await this.getReservedStock(item.productId);
+              if (item.quantity < reservedForSet) {
+                results.push({
+                  productId: item.productId,
+                  previousStock,
+                  newStock: previousStock,
+                  updateType,
+                  success: false,
+                  error: `Cannot set stock below reserved amount. Reserved: ${reservedForSet}, Attempted: ${item.quantity}`,
+                });
+                continue;
+              }
+
+              newStock = item.quantity;
+              quantityChange = newStock - previousStock;
+              transactionType = quantityChange >= 0 ? TransactionType.IN : TransactionType.OUT;
+              break;
+            }
+          }
+
+          // Validate non-negative stock
+          if (newStock < 0) {
+            results.push({
+              productId: item.productId,
+              previousStock,
+              newStock: previousStock,
+              updateType,
+              success: false,
+              error: `Stock cannot be negative. Current: ${previousStock}, Attempted: ${newStock}`,
+            });
+            continue;
+          }
+
+          // Update product stock
+          product.stock = newStock;
+          await manager.save(Product, product);
+
+          // Record inventory transaction
+          const transaction = manager.create(InventoryTransaction, {
+            productId: item.productId,
+            transactionType,
+            quantity: quantityChange,
+            previousStock,
+            newStock,
+            referenceType: 'BULK_UPDATE',
+            reason: reason || `Bulk stock ${updateType.toLowerCase()}: ${item.quantity} units`,
+          });
+          await manager.save(InventoryTransaction, transaction);
+
+          // Check and update stock alerts
+          const availableStock = await this.getAvailableStock(item.productId);
+          await this.createOrUpdateStockAlert(
+            item.productId,
+            availableStock,
+            this.LOW_STOCK_THRESHOLD,
+          );
+          await this.resolveStockAlert(item.productId);
+
+          results.push({
+            productId: item.productId,
+            previousStock,
+            newStock,
+            updateType,
+            success: true,
+          });
+        } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+          results.push({
+            productId: item.productId,
+            previousStock: 0,
+            newStock: 0,
+            updateType: item.updateType || 'SET',
+            success: false,
+            error: errorMessage,
+          });
+        }
+      }
+
+      // Check if all updates were successful
+      const allSuccessful = results.every((r) => r.success);
+      const successCount = results.filter((r) => r.success).length;
+
+      // If any failed, rollback transaction
+      if (!allSuccessful) {
+        throw new BadRequestException({
+          message: `Bulk update failed. ${successCount}/${items.length} succeeded. Transaction rolled back.`,
+          results,
+        });
+      }
+
+      return {
+        success: true,
+        updated: successCount,
+        results,
+      };
+    });
   }
 }
